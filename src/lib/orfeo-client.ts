@@ -54,12 +54,134 @@ export function mapStatus(row: EmployeeWorkingHours, nowISO: string): ShiftStatu
   return "UPCOMING";
 }
 
+// Données de test pour la démo
+function generateTestData(params: {
+  employeeId: number;
+  overlapAfter?: string;
+  overlapBefore?: string;
+}): EmployeeWorkingHours[] {
+  const now = new Date();
+  const testData: EmployeeWorkingHours[] = [];
+  
+  // Créneau validé (lundi dernier)
+  const lastMonday = new Date(now);
+  lastMonday.setDate(now.getDate() - ((now.getDay() + 6) % 7) - 7);
+  lastMonday.setHours(9, 0, 0, 0);
+  const lastMondayEnd = new Date(lastMonday);
+  lastMondayEnd.setHours(17, 0, 0, 0);
+  
+  testData.push({
+    pk: 1,
+    employee: params.employeeId,
+    start_datetime: lastMonday.toISOString(),
+    end_datetime: lastMondayEnd.toISOString(),
+    validation_status: "validated",
+    profession: 1,
+    service: 2,
+    place: 1,
+    notes: "Journée complète de formation",
+    planned_start_datetime: lastMonday.toISOString(),
+    planned_end_datetime: lastMondayEnd.toISOString(),
+  });
+
+  // Créneau en validation (hier)
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  yesterday.setHours(14, 0, 0, 0);
+  const yesterdayEnd = new Date(yesterday);
+  yesterdayEnd.setHours(18, 0, 0, 0);
+  
+  testData.push({
+    pk: 2,
+    employee: params.employeeId,
+    start_datetime: yesterday.toISOString(),
+    end_datetime: yesterdayEnd.toISOString(),
+    validation_status: "pending",
+    profession: 2,
+    service: 1,
+    place: 2,
+    notes: "Réunion client prolongée",
+    planned_start_datetime: yesterday.toISOString(),
+    planned_end_datetime: yesterdayEnd.toISOString(),
+  });
+
+  // Créneau à déclarer (ce matin)
+  const thisMonring = new Date(now);
+  thisMonring.setHours(8, 30, 0, 0);
+  const thisMorningEnd = new Date(thisMonring);
+  thisMorningEnd.setHours(12, 30, 0, 0);
+  
+  testData.push({
+    pk: 3,
+    employee: params.employeeId,
+    start_datetime: thisMonring.toISOString(),
+    end_datetime: thisMorningEnd.toISOString(),
+    validation_status: "planified",
+    profession: 1,
+    service: 1,
+    place: 1,
+    notes: null,
+    planned_start_datetime: thisMonring.toISOString(),
+    planned_end_datetime: thisMorningEnd.toISOString(),
+  });
+
+  // Créneau à venir (demain)
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  tomorrow.setHours(9, 0, 0, 0);
+  const tomorrowEnd = new Date(tomorrow);
+  tomorrowEnd.setHours(17, 0, 0, 0);
+  
+  testData.push({
+    pk: 4,
+    employee: params.employeeId,
+    start_datetime: tomorrow.toISOString(),
+    end_datetime: tomorrowEnd.toISOString(),
+    validation_status: "planified",
+    profession: 3,
+    service: 2,
+    place: 3,
+    notes: null,
+    planned_start_datetime: tomorrow.toISOString(),
+    planned_end_datetime: tomorrowEnd.toISOString(),
+  });
+
+  // Autre créneau à venir (vendredi)
+  const friday = new Date(now);
+  friday.setDate(now.getDate() + ((5 - now.getDay() + 7) % 7));
+  friday.setHours(13, 0, 0, 0);
+  const fridayEnd = new Date(friday);
+  fridayEnd.setHours(16, 0, 0, 0);
+  
+  testData.push({
+    pk: 5,
+    employee: params.employeeId,
+    start_datetime: friday.toISOString(),
+    end_datetime: fridayEnd.toISOString(),
+    validation_status: "planified",
+    profession: 2,
+    service: 3,
+    place: 1,
+    notes: null,
+    planned_start_datetime: friday.toISOString(),
+    planned_end_datetime: fridayEnd.toISOString(),
+  });
+
+  return testData;
+}
+
 // Récupération des créneaux de travail
 export async function listWorkingHours(params: {
   employeeId: number;
   overlapAfter?: string;
   overlapBefore?: string;
 }) {
+  // En mode démo, retourner les données de test
+  if (import.meta.env.VITE_DEMO_MODE === 'true') {
+    const testData = generateTestData(params);
+    return testData.map((r) => EmployeeWorkingHoursSchema.parse(r));
+  }
+
   const qs = new URLSearchParams();
   qs.set("employee", String(params.employeeId));
   if (params.overlapAfter) qs.set("dates_overlap_after", params.overlapAfter);
@@ -107,6 +229,27 @@ async function patchNoteIfAny(id: number, note?: string) {
 
 // Fonction principale pour déclarer les heures
 export async function declareHours(id: number, payload: DeclareHoursPayload) {
+  // En mode démo, simuler la déclaration
+  if (import.meta.env.VITE_DEMO_MODE === 'true') {
+    // Simuler un délai d'API
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Retourner le créneau avec le statut mis à jour
+    return {
+      pk: id,
+      employee: 1,
+      start_datetime: payload.start_datetime,
+      end_datetime: payload.end_datetime,
+      validation_status: "pending" as const,
+      profession: 1,
+      service: 1,
+      place: 1,
+      notes: payload.note || null,
+      planned_start_datetime: payload.start_datetime,
+      planned_end_datetime: payload.end_datetime,
+    };
+  }
+
   const updated = await setEffectiveHours(id, payload);
   await patchNoteIfAny(id, payload.note);
   return EmployeeWorkingHoursSchema.parse(updated);
